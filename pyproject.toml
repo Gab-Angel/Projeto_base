@@ -1,0 +1,23 @@
+[tool.ruff]
+line-length = 79
+extend-exclude = ['migrations']
+
+[tool.pytest.init_options]
+pythonpath = '.'
+addopts = '-p no:warnings'
+
+[tool.ruff.lint]
+preview = true
+select = ['I', 'F', 'E', 'W', 'PL', 'PT']
+
+[tool.ruff.format]
+preview = true
+quote-style = 'single'
+
+[tool.taskipy.tasks]
+run = 'fastapi dev Fast_API/app.py'
+test = 'pytest -s -x --cov=Fast_API -vv'
+lint = 'ruff check . ; ruff check . --diff'
+format = 'ruff check . --fix ; ruff format .'
+post_test = 'coverage html'
+pre_test = 'task lint'
