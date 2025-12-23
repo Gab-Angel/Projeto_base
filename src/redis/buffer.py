@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from typing import Awaitable, Callable
-
+from src.redis.client_redis import redis_client
 from dotenv import load_dotenv
 
 import redis
@@ -10,13 +10,7 @@ import redis
 load_dotenv()
 
 # --- Configurações ---
-redis_client = redis.Redis(
-    host=os.getenv('REDIS_HOST'),
-    port=6379,
-    password=os.getenv('SENHA_REDIS'),
-    db=0,
-    decode_responses=True,
-)
+redis_client = redis_client
 
 BUFFER_TIMEOUT = 10  # segundos
 

@@ -1,84 +1,111 @@
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from langchain_core.messages import HumanMessage
-
-from src.agent.audio_transcription import audio_transcription
-from src.db.table import create_tables
-from src.graph.workflow import graph
+# Imports do seu projeto
 from src.redis.buffer import adicionar_ao_buffer, iniciar_ouvinte_background
+from src.redis.rq import enqueue_agent_processing
+from src.agent.audio_transcription import audio_transcription
 
+
+# ============================================================================
+# FUNÇÃO QUE PROCESSA AS MENSAGENS AGRUPADAS (Callback do ouvinte)
+# ============================================================================
 
 async def processar_mensagens_agrupadas(numero: str, texto_final: str):
-
+    """
+    Callback chamado quando o timer do buffer expira.
+    
+    NOVO FLUXO COM RQ:
+    1. Recebe número e texto agrupado do ouvinte Redis
+    2. Coloca uma tarefa na fila RQ (não bloqueia)
+    3. Um worker separado executa a tarefa
+    4. Retorna imediatamente
+    
+    VANTAGENS:
+    - Não bloqueia a aplicação
+    - Retry automático se falhar
+    - Worker pode estar em outro servidor
+    - Melhor para produção
+    
+    Args:
+        numero (str): ID do usuário
+        texto_final (str): Mensagens concatenadas com espaço
+    """
     try:
-        print(f'📦 Processando buffer para: {numero}')
-        print(f'💬 Texto agrupado: {texto_final}')
-
-        entrada = {
-            'messages': [HumanMessage(content=texto_final)],
-            'number': numero,
-        }
-
-        resultado = graph.invoke(entrada)
-
-        if resultado.get("messages"):
-            ultima_mensagem = resultado["messages"][-1]
-            
-            # Pega a resposta do AI
-            if hasattr(ultima_mensagem, 'content'):
-                resposta_ia = ultima_mensagem.content
-            else:
-                resposta_ia = "Sem resposta"
-            
-            # Pega metadados de uso de tokens e performance
-            metadata = getattr(ultima_mensagem, 'response_metadata', {})
-            token_usage = metadata.get('token_usage', {})
-            
-            print(f"✅ Agente processou com sucesso para {numero}")
-            print(f"\n{'='*60}")
-            print(f"📝 Resposta IA: {resposta_ia}")
-            print(f"\n📊 Métricas:")
-            print(f"   • Tokens entrada: {token_usage.get('prompt_tokens', 'N/A')}")
-            print(f"   • Tokens saída: {token_usage.get('completion_tokens', 'N/A')}")
-            print(f"   • Total tokens: {token_usage.get('total_tokens', 'N/A')}")
-            print(f"   • Tempo total: {metadata.get('total_time', 'N/A'):.3f}s" if isinstance(metadata.get('total_time'), (int, float)) else f"   • Tempo total: {metadata.get('total_time', 'N/A')}")
-            print(f"   • Modelo: {metadata.get('model_name', 'N/A')}")
-            print(f"   • Motivo finalização: {metadata.get('finish_reason', 'N/A')}")
-            print(f"{'='*60}\n")
-
-
+        print(f"📦 Buffer expirado para: {numero}")
+        print(f"💬 Texto agrupado: {texto_final}")
+        
+        # Coloca na fila RQ (não executa agora, apenas enfileira)
+        enqueue_agent_processing(numero, texto_final)
+        
     except Exception as e:
-        print(f'❌ Erro ao processar mensagens para {numero}: {e}')
-        print(
-            f'Entrada que causou erro: numero={numero}, texto={texto_final}\n'
-        )
+        print(f"❌ Erro ao enfileirar processamento para {numero}: {e}\n")
 
+
+# ============================================================================
+# LIFESPAN: Inicializa e encerra a aplicação
+# ============================================================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
-    print('🚀 Inicializando aplicação...')
-
-    create_tables()
-    print('🟢 Banco pronto!')
-
+    """
+    Context manager que gerencia o ciclo de vida da aplicação FastAPI.
+    
+    STARTUP (yield):
+    - Cria tabelas do banco de dados
+    - Inicia o ouvinte de expiração do Redis em background
+    
+    SHUTDOWN (após yield):
+    - Para a aplicação de forma controlada
+    
+    COMO FUNCIONA:
+    1. Quando a app sobe, o código antes de 'yield' é executado
+    2. A app roda normalmente
+    3. Quando a app encerra, o código depois de 'yield' é executado
+    """
+    print("🚀 Inicializando aplicação...")
+    
+    # Se quiser criar tabelas automaticamente, descomente:
+    # create_tables_pgvector()
+    # print("🟢 Banco pronto!")
+    
+    # Inicia o ouvinte em background
+    # Passa a função que será chamada quando buffer expirar
     iniciar_ouvinte_background(processar_mensagens_agrupadas)
-
-    print('✅ Sistema de buffer pronto!\n')
-
+    
+    print("✅ Sistema de buffer pronto!\n")
+    
     yield  # Aplicação roda aqui
+    
+    print("🛑 Encerrando aplicação...")
 
-    print('🛑 Encerrando aplicação...')
 
+# ============================================================================
+# CRIAÇÃO DA APP FASTAPI
+# ============================================================================
 
 app = FastAPI(lifespan=lifespan)
 
 
+# ============================================================================
+# WEBHOOK: Recebe mensagens do WhatsApp
+# ============================================================================
+
 @app.post('/webhook')
 async def webhook(request: Request):
-
+    """
+    Recebe mensagens do WhatsApp via webhook.
+    
+    FLUXO:
+    1. Recebe dados do WhatsApp
+    2. Extrai informações úteis (tipo de mensagem, conteúdo, número)
+    3. Adiciona ao buffer Redis
+    4. Timer começa/reinicia
+    5. Retorna sucesso
+    
+    O processamento acontece automaticamente no background quando o timer expira.
+    """
     try:
         data = await request.json()
         messageType = data['data'].get('messageType')
@@ -87,45 +114,50 @@ async def webhook(request: Request):
             # ========== EXTRAI O TIPO DE MENSAGEM ==========
             if messageType == 'conversation':
                 # Mensagem de texto normal
-                message = data['data']['message'].get('conversation')
+                message = data['data']["message"].get("conversation")
 
             elif messageType == 'audioMessage':
                 # Mensagem de áudio - precisa transcrição
-                base64 = data['data']['message'].get('base64')
-                print('Processando Audio...')
+                base64 = data['data']["message"].get("base64")
+                print("Processando Audio...")
                 result = audio_transcription(audio_base64=base64)
-                message = result['text']
+                message = result["text"]
 
             else:
                 # Tipo de mensagem não suportado
                 message = None
-
+            
             # ========== EXTRAI O NÚMERO DO USUÁRIO ==========
-            remoteJid = data['data']['key'].get('remoteJid')
+            remoteJid = data['data']["key"].get("remoteJid")
             number = remoteJid.split('@')[0]
 
             # ========== ADICIONA AO BUFFER ==========
-            print(f'📲 Mensagem de: {number}')
-            print(f'💬 Conteúdo: {message}')
+            print(f"📲 Mensagem de: {number}")
+            print(f"💬 Conteúdo: {message}")
 
             adicionar_ao_buffer(number, message)
-
-            print(f'➕ Mensagem adicionada ao buffer para {number}\n')
-
+            
+            print(f"➕ Mensagem adicionada ao buffer para {number}\n")
+            
             return JSONResponse(
-                content={'status': 'mensagem adicionada ao buffer'},
-                status_code=200,
+                content={"status": "mensagem adicionada ao buffer"},
+                status_code=200
             )
         else:
-            print('⚠️ Payload do webhook não continha os dados esperados.')
+            print("⚠️ Payload do webhook não continha os dados esperados.")
             return JSONResponse(
-                content={'status': 'payload invalido'}, status_code=400
+                content={"status": "payload invalido"},
+                status_code=400
             )
-
+            
     except Exception as e:
-        print(f'❌ Erro no webhook: {e}')
-        raise HTTPException(status_code=500, detail='erro interno')
+        print(f"❌ Erro no webhook: {e}")
+        raise HTTPException(status_code=500, detail="erro interno")
 
+
+# ============================================================================
+# ROTA DE HEALTH CHECK (Opcional)
+# ============================================================================
 
 @app.get('/health')
 async def health_check():
@@ -133,4 +165,7 @@ async def health_check():
     Rota simples para verificar se a app está rodando.
     Útil para monitoramento.
     """
-    return {'status': 'ok', 'message': 'Aplicação rodando com sucesso'}
+    return {
+        "status": "ok",
+        "message": "Aplicação rodando com sucesso"
+    }
