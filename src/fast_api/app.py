@@ -122,6 +122,7 @@ async def webhook(request: Request):
 
             elif messageType == 'audioMessage':
                 # Mensagem de áudio - precisa transcrição
+                print(f"DEBUG - Mensagem completa: {data['data']['message']}")
                 base64 = data['data']['message'].get('base64')
                 print('Processando Audio...')
                 result = audio_transcription(audio_base64=base64)
