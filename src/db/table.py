@@ -19,15 +19,15 @@ def create_tables(retries=10, delay=3):
                 tipo_usuario VARCHAR(20),
                 turma_serie VARCHAR(50),
                 metadata JSONB DEFAULT '{}',
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo'),
+                updated_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo')
             );
 
             CREATE TABLE IF NOT EXISTS chat_ia (
                 id SERIAL PRIMARY KEY,
                 session_id VARCHAR(20),
                 message JSONB NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo')
             );
 
             CREATE TABLE IF NOT EXISTS rag_embeddings (
@@ -35,7 +35,7 @@ def create_tables(retries=10, delay=3):
                 content TEXT NOT NULL,
                 categoria VARCHAR(100),
                 embedding VECTOR(768),
-                created_at TIMESTAMP DEFAULT NOW()
+                created_at TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo')
             );
 
             CREATE INDEX IF NOT EXISTS rag_embedding_idx
@@ -51,7 +51,7 @@ def create_tables(retries=10, delay=3):
                 fileName VARCHAR(255) NOT NULL,
                 mediaType VARCHAR(20) NOT NULL,
                 caminho VARCHAR NOT NULL,
-                criado_em TIMESTAMP DEFAULT NOW()
+                criado_em TIMESTAMPTZ DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo')
             );
 
             CREATE INDEX IF NOT EXISTS arquivos_categoria_idx

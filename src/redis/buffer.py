@@ -1,11 +1,10 @@
 import asyncio
 import json
-import os
 from typing import Awaitable, Callable
-from src.redis.client_redis import redis_client
+
 from dotenv import load_dotenv
 
-import redis
+from src.redis.client_redis import redis_client
 
 load_dotenv()
 
@@ -154,7 +153,6 @@ def iniciar_ouvinte_background(
     import threading
 
     def executar_ouvinte():
-        # Cria um novo event loop para essa thread
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
