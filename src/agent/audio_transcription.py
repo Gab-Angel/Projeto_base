@@ -1,5 +1,6 @@
 import base64
 import os
+from typing import Union
 
 import requests
 from dotenv import load_dotenv
@@ -8,12 +9,27 @@ load_dotenv()
 bearer = os.getenv('BEARER_AUDIO_TRANSCRIPTION')
 
 
-def audio_transcription(audio_base64: str) -> str:
-    # Decodifica e salva em um arquivo temporário
+def audio_transcription(audio_data: Union[bytes, str]) -> dict:
+    """
+    Transcreve áudio usando Groq Whisper.
+    
+    Args:
+        audio_data: Pode ser bytes ou string base64
+    
+    Returns:
+        dict: Resultado da transcrição com chave 'text'
+    """
+    # Se for string base64, decodifica
+    if isinstance(audio_data, str):
+        audio_bytes = base64.b64decode(audio_data)
+    else:
+        audio_bytes = audio_data
+    
+    # Salva em arquivo temporário
     with open('temp_audio.mp3', 'wb') as f:
-        f.write(base64.b64decode(audio_base64))
+        f.write(audio_bytes)
 
-    # Agora envia o arquivo como antes
+    # Envia para transcrição
     headers = {
         'Authorization': f'Bearer {bearer}',
     }
@@ -29,5 +45,5 @@ def audio_transcription(audio_base64: str) -> str:
         headers=headers,
         files=files,
     )
-    result = response.json()
-    return result
+    
+    return response.json()
