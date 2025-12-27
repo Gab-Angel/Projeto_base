@@ -122,7 +122,7 @@ async def webhook(request: Request):
                 message = data['data']['message'].get('conversation')
 
             elif messageType == 'audioMessage':
-                print(data['data']['message'])
+                print(data['data'])
                 audio_base64 = data['data']['message'].get('base64')
                 
                 if not audio_base64:
