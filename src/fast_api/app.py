@@ -137,7 +137,7 @@ async def webhook(request: Request):
                         response.raise_for_status()
                         
                         print('🎤 Processando Audio...')
-                        result = audio_transcription(audio_base64=response.content)
+                        result = audio_transcription(audio_data=response.content)
                         message = result.get('text', '[Erro na transcrição]')
 
                     except Exception as e:
