@@ -1,0 +1,50 @@
+services:
+  # API FastAPI
+  api:
+    build: .
+    restart: always
+    expose:
+      - "8002"
+    command: uvicorn src.fast_api.app:app --host 0.0.0.0 --port 8002
+    environment:
+      # PostgreSQL
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD}
+      # Redis
+      REDIS_HOST: ${REDIS_HOST}
+      SENHA_REDIS: ${SENHA_REDIS}
+      # Evolution API
+      BASE_URL_EVO: ${BASE_URL_EVO}
+      API_KEY_EVO: ${API_KEY_EVO}
+      API_TOKEN_GLOBAL_EVO: ${API_TOKEN_GLOBAL_EVO}
+      INSTANCE_NAME: ${INSTANCE_NAME}
+      # APIs externas
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      BEARER_AUDIO_TRANSCRIPTION: ${BEARER_AUDIO_TRANSCRIPTION}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+  # Worker RQ - processa tarefas em background
+  worker:
+    build: .
+    restart: always
+    command: rq worker --url redis://:${SENHA_REDIS}@${REDIS_HOST}:6379/0
+    environment:
+      # PostgreSQL
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD}
+      # Redis
+      REDIS_HOST: ${REDIS_HOST}
+      SENHA_REDIS: ${SENHA_REDIS}
+      # Evolution API
+      BASE_URL_EVO: ${BASE_URL_EVO}
+      API_KEY_EVO: ${API_KEY_EVO}
+      API_TOKEN_GLOBAL_EVO: ${API_TOKEN_GLOBAL_EVO}
+      INSTANCE_NAME: ${INSTANCE_NAME}
+      # APIs externas
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      BEARER_AUDIO_TRANSCRIPTION: ${BEARER_AUDIO_TRANSCRIPTION}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
