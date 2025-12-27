@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-
+from src.db.table import create_tables
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -70,8 +70,8 @@ async def lifespan(app: FastAPI):
     print('🚀 Inicializando aplicação...')
 
     # Se quiser criar tabelas automaticamente, descomente:
-    # create_tables_pgvector()
-    # print("🟢 Banco pronto!")
+    create_tables()
+    print("🟢 Banco pronto!")
 
     # Inicia o ouvinte em background
     # Passa a função que será chamada quando buffer expirar
