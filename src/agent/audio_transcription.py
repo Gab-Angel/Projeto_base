@@ -46,4 +46,10 @@ def audio_transcription(audio_data: Union[bytes, str]) -> dict:
         files=files,
     )
     
-    return response.json()
+    result = response.json()
+    
+    # Debug
+    print(f"📊 Status da transcrição: {response.status_code}")
+    print(f"📝 Resposta da API: {result}")
+    
+    return result
