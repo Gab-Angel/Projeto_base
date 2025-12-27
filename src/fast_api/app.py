@@ -8,7 +8,8 @@ from src.agent.audio_transcription import audio_transcription
 # Imports do seu projeto
 from src.redis.buffer import adicionar_ao_buffer, iniciar_ouvinte_background
 from src.redis.rq import enqueue_agent_processing
-
+import requests
+import base64
 # ============================================================================
 # FUNÇÃO QUE PROCESSA AS MENSAGENS AGRUPADAS (Callback do ouvinte)
 # ============================================================================
@@ -121,12 +122,27 @@ async def webhook(request: Request):
                 message = data['data']['message'].get('conversation')
 
             elif messageType == 'audioMessage':
-                # Mensagem de áudio - precisa transcrição
-                print(f"DEBUG - Mensagem completa: {data['data']['message']}")
-                base64 = data['data']['message'].get('base64')
-                print('Processando Audio...')
-                result = audio_transcription(audio_base64=base64)
-                message = result['text']
+                
+                audio_url = data['data']['message']['audioMessage'].get('url')
+                
+                if not audio_url:
+                    print("❌ URL do áudio não encontrada")
+                    message = "[Áudio não processado]"
+                else:
+                    print(f'📥 Baixando áudio de: {audio_url}')
+                    
+                    try:
+                        # Baixa o áudio
+                        response = requests.get(audio_url, timeout=30)
+                        response.raise_for_status()
+                        
+                        print('🎤 Processando Audio...')
+                        result = audio_transcription(audio_base64=response.content)
+                        message = result['text']
+
+                    except Exception as e:
+                        print(f"❌ Erro ao processar áudio: {e}")
+                        message = "[Erro ao processar áudio]"
 
             else:
                 # Tipo de mensagem não suportado
