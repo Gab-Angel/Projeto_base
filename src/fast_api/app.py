@@ -122,24 +122,17 @@ async def webhook(request: Request):
                 message = data['data']['message'].get('conversation')
 
             elif messageType == 'audioMessage':
+    # Pega o base64 direto do data['data']['message']
+                audio_base64 = data['data']['message'].get('base64')
                 
-                audio_url = data['data']['message']['audioMessage'].get('url')
-                
-                if not audio_url:
-                    print("❌ URL do áudio não encontrada")
+                if not audio_base64:
+                    print("❌ Base64 do áudio não encontrado")
                     message = "[Áudio não processado]"
                 else:
-                    print(f'📥 Baixando áudio de: {audio_url}')
-                    
+                    print('🎤 Processando Audio...')
                     try:
-                        # Baixa o áudio
-                        response = requests.get(audio_url, timeout=30)
-                        response.raise_for_status()
-                        
-                        print('🎤 Processando Audio...')
-                        result = audio_transcription(audio_data=response.content)
+                        result = audio_transcription(audio_base64=audio_base64)
                         message = result.get('text', '[Erro na transcrição]')
-
                     except Exception as e:
                         print(f"❌ Erro ao processar áudio: {e}")
                         message = "[Erro ao processar áudio]"
